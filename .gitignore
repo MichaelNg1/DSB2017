@@ -1,6 +1,11 @@
-# Tensorflow data files
+# DSB2017 data filetypes
+*.dcm
 *.csv
 *.tfrecords
+*.txt
+
+# Other language-specific filetypes
+*.asv # matlab temporary save
 
 # compressed files
 *.gz
