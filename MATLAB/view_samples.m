@@ -74,19 +74,26 @@ PATIENT_CANCER_LABEL = labels{2}(temp_index);
 %% View the images in ascending order %%
 fprintf(['Press a or d to decrement/increment, respectively.' ...
 	'\nPress s to enter a custom index. \nPress esc to exit. \n']);
+keypress = '';
+
+display_fig = figure(1);
+% set(display_fig, 'KeyPressFcn', @figure_key_input);
+patient_info = ['Patient: ' PATIENT_NAME ' | Cancer: ' PATIENT_CANCER_LABEL{1}];
 
 i = 1;
 while(true)
-%     plot_low_rank(i, PATIENT_CANCER_LABEL, PATIENT_NAME, SAMPLE_FILES_LIST);
-
-    fig = figure(1);
+    % Create general figure parameters
     [X, map] = dicomread(SAMPLE_FILES_LIST{i});
+    fig_name = ['Sample ' num2str(i) ' out of ' num2str(length(SAMPLE_FILES_LIST))];
+    
     if DISPLAY == 1 % display individual slice
-        imshow(X,map)        
-    elseif DISPLAY == 2
-        subplot(1,3,1);
-        imshow(X, map);
-        % Evaluate low rank representation
+        imshow(X,map)
+        title(fig_name);
+        xlabel(patient_info);
+        ylabel(['z: ' num2str(img_pos(i,3))]);
+        
+    elseif DISPLAY == 2 % Display low rank representation
+        %% Evaluate low rank representation sparse_X
         [U,S,V] = svd(double(X));
         sing_vals = diag(S);
         sing_vals_sum = sum(sing_vals);
@@ -94,29 +101,33 @@ while(true)
         while(sum(sing_vals(1:temp)) < VARIANCE * sing_vals_sum)
             temp = temp + 1;
         end
-        subplot(1,3,2);
         sparse_X = U(:,1:temp) * S(1:temp, 1:temp)* V(:,1:temp)';
+
+        % Compute the error (optional: choose which colormap to use)
+        error = num2str(norm(sparse_X - double(X),'fro'));
+        
+        %% Visualize original, low rank representation, and error
+        set(gcf, 'Position', [600 600 800 400]);
+        suptitle({fig_name, patient_info})
+        subplot(1,3,1); % original
+        imshow(X, map);
+        title('Original Slice');
+        
+        subplot(1,3,2); % low rank representation
         imshow(sparse_X, map);
         title(['Singular Values Kept: ' num2str(temp) '/' num2str(length(sing_vals))]);
-        xlabel(['Percentage Variance Maintained: ' num2str(VARIANCE)])
-
-        % Visualize the error (optional: choose which colormap to use)
-        subplot(1,3,3)
-        error = num2str(norm(sparse_X - double(X),'fro'));
+        xlabel(['Percentage Variance Maintained: ' num2str(VARIANCE)])      
+        
+        subplot(1,3,3) % error
         imshow(abs(uint16(sparse_X) - X), jet);
         imshow(abs(uint16(sparse_X) - X), map);
         colorbar;
         title('Absolute Error');
-        xlabel(['l2 error: ' error])
+        xlabel(['L2 error: ' error])        
     end
+    drawnow;
     
-	title(['Sample ' num2str(i) ' out of ' num2str(length(SAMPLE_FILES_LIST))]);
-	xlabel(['Patient: ' PATIENT_NAME ' | Cancer: ' PATIENT_CANCER_LABEL{1}]);
-	ylabel(['z: ' num2str(img_pos(i,3))]);
-	drawnow;
-
-
-	% Keyboard commands
+    % Keyboard commands
 	ch = getkey('non-ascii');
 
 	if (strcmp(ch,'escape'))
@@ -127,7 +138,7 @@ while(true)
 		i = i + 1;
 	elseif (strcmp(ch,'s'))
 		i = input('\nEnter index: ');
-	end
+    end
 
 	% Ensure we stay in range
 	i = max(1, i);
