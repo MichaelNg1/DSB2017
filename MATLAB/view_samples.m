@@ -30,6 +30,10 @@ EX_PATIENT_NO_CANCER = '0a0c32c9e08cc2ea76a71649de56be6d';
 EX_PATIENT_CANCER = '0d06d764d3c07572074d468b4cff954f';
 PATIENT_NAME = EX_PATIENT_CANCER;
 
+% Specify type of display
+% 1 = standard slice, 2 = low rank representation with error
+DISPLAY = 2;
+
 VARIANCE = 0.9;
 
 %% The following lines is if the user wishes to define a custom index (3: NUM_SAMPLE)
@@ -73,41 +77,44 @@ fprintf(['Press a or d to decrement/increment, respectively.' ...
 
 i = 1;
 while(true)
+%     plot_low_rank(i, PATIENT_CANCER_LABEL, PATIENT_NAME, SAMPLE_FILES_LIST);
 
-	% Plot figure
-	fig = figure(1); 
-	[X, map] = dicomread(SAMPLE_FILES_LIST{i});
+    fig = figure(1);
+    [X, map] = dicomread(SAMPLE_FILES_LIST{i});
+    if DISPLAY == 1 % display individual slice
+        imshow(X,map)        
+    elseif DISPLAY == 2
+        subplot(1,3,1);
+        imshow(X, map);
+        % Evaluate low rank representation
+        [U,S,V] = svd(double(X));
+        sing_vals = diag(S);
+        sing_vals_sum = sum(sing_vals);
+        temp = 1;
+        while(sum(sing_vals(1:temp)) < VARIANCE * sing_vals_sum)
+            temp = temp + 1;
+        end
+        subplot(1,3,2);
+        sparse_X = U(:,1:temp) * S(1:temp, 1:temp)* V(:,1:temp)';
+        imshow(sparse_X, map);
+        title(['Singular Values Kept: ' num2str(temp) '/' num2str(length(sing_vals))]);
+        xlabel(['Percentage Variance Maintained: ' num2str(VARIANCE)])
 
-	subplot(1,3,1);
-	imshow(X, map);
-
+        % Visualize the error (optional: choose which colormap to use)
+        subplot(1,3,3)
+        error = num2str(norm(sparse_X - double(X),'fro'));
+        imshow(abs(uint16(sparse_X) - X), jet);
+        imshow(abs(uint16(sparse_X) - X), map);
+        colorbar;
+        title('Absolute Error');
+        xlabel(['l2 error: ' error])
+    end
+    
 	title(['Sample ' num2str(i) ' out of ' num2str(length(SAMPLE_FILES_LIST))]);
 	xlabel(['Patient: ' PATIENT_NAME ' | Cancer: ' PATIENT_CANCER_LABEL{1}]);
 	ylabel(['z: ' num2str(img_pos(i,3))]);
 	drawnow;
 
-	% Evaluate low rank representation
-	[U,S,V] = svd(double(X));
-	sing_vals = diag(S);
-	sing_vals_sum = sum(sing_vals);
-	temp = 1;
-	while(sum(sing_vals(1:temp)) < VARIANCE * sing_vals_sum)
-		temp = temp + 1;
-	end
-	subplot(1,3,2);
-	sparse_X = U(:,1:temp) * S(1:temp, 1:temp)* V(:,1:temp)';
-	imshow(sparse_X, map);
-	title(['Singular Values Kept: ' num2str(temp) '/' num2str(length(sing_vals))]);
-	xlabel(['Percentage Variance Maintained: ' num2str(VARIANCE)])
-
-	% Visualize the error (optional: choose which colormap to use)
-	subplot(1,3,3)
-	error = num2str(norm(sparse_X - double(X),'fro'));
-	imshow(abs(uint16(sparse_X) - X), jet);
-	% imshow(abs(uint16(sparse_X) - X), map);
-	colorbar;
-	title('Absolute Error');
-	xlabel(['l2 error: ' error])
 
 	% Keyboard commands
 	ch = getkey('non-ascii');
