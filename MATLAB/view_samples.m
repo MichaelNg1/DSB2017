@@ -1,18 +1,19 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Author:	Michael Nguyen
-% Updated:	3/2/2017
-% Email:	mn2769@columbia.edu
+% Author:	Michael Nguyen, Neil Jassal
+% Updated:	3/3/2017
+% Email:	mn2769@columbia.edu, neil.jassal@gmail.com
 %
 % view_samples visualizes the patient's CT scans in ascending order (height)
-% Uses getkey.m by Jos van der Geest (jos@jasen.nl) - temporary
-% (Caution: Keyboard commands are buggy)
 %
 % History
 % Version 1.0: Displays only image
 % Version 1.1: Computes a low rank representation of original image and error
+% Version 1.1: Options for image or low-rank representation, replaced
+%               getkey() with callbacks for cleaner UI navigation
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 clear all;
+global DISPLAY PATIENT_INFO SAMPLE_FILES_LIST VARIANCE index;
 
 %% User defined Parameters %%
 % Provide filepath to sample images and labels
@@ -25,16 +26,16 @@ clear all;
 FILE_PATH = 'data\sample_images';
 FILE_PATH_LABELS = 'data\stage1_labels.csv';
 
-%% File and Processing Parameters
+% Patient and Processing Parameters
 EX_PATIENT_NO_CANCER = '0a0c32c9e08cc2ea76a71649de56be6d';
 EX_PATIENT_CANCER = '0d06d764d3c07572074d468b4cff954f';
 PATIENT_NAME = EX_PATIENT_CANCER;
 
+VARIANCE = 0.9; % Only for low rank representation
+
 % Specify type of display
 % 1 = standard slice, 2 = low rank representation with error
 DISPLAY = 2;
-
-VARIANCE = 0.9;
 
 %% The following lines is if the user wishes to define a custom index (3: NUM_SAMPLE)
 % index = 4;
@@ -56,8 +57,8 @@ for i = 3: NUM_SAMPLE_FILES
 	SAMPLE_FILES_LIST{i-2} = [SAMPLE_PATH '\' SAMPLE_FILES(i).name];
 	sample_info = dicominfo(SAMPLE_FILES_LIST{i-2});
 	img_pos(i - 2, :) = sample_info.ImagePositionPatient;
-
 end
+
 [~, sorted_index] = sort(img_pos(:,3), 1);
 img_pos = img_pos(sorted_index,:);
 SAMPLE_FILES_LIST = SAMPLE_FILES_LIST(sorted_index);
@@ -70,77 +71,14 @@ fclose(FileID);
 
 temp_index = find( strcmp(labels{1}, PATIENT_NAME));
 PATIENT_CANCER_LABEL = labels{2}(temp_index);
+PATIENT_INFO = ['Patient: ' PATIENT_NAME ' | Cancer: ' PATIENT_CANCER_LABEL{1}];
 
-%% View the images in ascending order %%
+%% Display figure and wait for callbacks
 fprintf(['Press a or d to decrement/increment, respectively.' ...
 	'\nPress s to enter a custom index. \nPress esc to exit. \n']);
-keypress = '';
 
+index = 1;
 display_fig = figure(1);
-% set(display_fig, 'KeyPressFcn', @figure_key_input);
-patient_info = ['Patient: ' PATIENT_NAME ' | Cancer: ' PATIENT_CANCER_LABEL{1}];
+set(display_fig, 'KeyReleaseFcn', @figure_key_input);
+plot_slice(index);
 
-i = 1;
-while(true)
-    % Create general figure parameters
-    [X, map] = dicomread(SAMPLE_FILES_LIST{i});
-    fig_name = ['Sample ' num2str(i) ' out of ' num2str(length(SAMPLE_FILES_LIST))];
-    
-    if DISPLAY == 1 % display individual slice
-        imshow(X,map)
-        title(fig_name);
-        xlabel(patient_info);
-        ylabel(['z: ' num2str(img_pos(i,3))]);
-        
-    elseif DISPLAY == 2 % Display low rank representation
-        %% Evaluate low rank representation sparse_X
-        [U,S,V] = svd(double(X));
-        sing_vals = diag(S);
-        sing_vals_sum = sum(sing_vals);
-        temp = 1;
-        while(sum(sing_vals(1:temp)) < VARIANCE * sing_vals_sum)
-            temp = temp + 1;
-        end
-        sparse_X = U(:,1:temp) * S(1:temp, 1:temp)* V(:,1:temp)';
-
-        % Compute the error (optional: choose which colormap to use)
-        error = num2str(norm(sparse_X - double(X),'fro'));
-        
-        %% Visualize original, low rank representation, and error
-        set(gcf, 'Position', [600 600 800 400]);
-        suptitle({fig_name, patient_info})
-        subplot(1,3,1); % original
-        imshow(X, map);
-        title('Original Slice');
-        
-        subplot(1,3,2); % low rank representation
-        imshow(sparse_X, map);
-        title(['Singular Values Kept: ' num2str(temp) '/' num2str(length(sing_vals))]);
-        xlabel(['Percentage Variance Maintained: ' num2str(VARIANCE)])      
-        
-        subplot(1,3,3) % error
-        imshow(abs(uint16(sparse_X) - X), jet);
-        imshow(abs(uint16(sparse_X) - X), map);
-        colorbar;
-        title('Absolute Error');
-        xlabel(['L2 error: ' error])        
-    end
-    drawnow;
-    
-    % Keyboard commands
-	ch = getkey('non-ascii');
-
-	if (strcmp(ch,'escape'))
-		return;
-	elseif (strcmp(ch,'a'))
-		i = i - 1;
-	elseif (strcmp(ch,'d'))
-		i = i + 1;
-	elseif (strcmp(ch,'s'))
-		i = input('\nEnter index: ');
-    end
-
-	% Ensure we stay in range
-	i = max(1, i);
-	i = min(i, length(SAMPLE_FILES_LIST));
-end
