@@ -5,7 +5,7 @@
 *.txt
 
 # Other language-specific filetypes
-*.asv # matlab temporary save
+*.asv
 
 # compressed files
 *.gz
