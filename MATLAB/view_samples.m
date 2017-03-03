@@ -14,9 +14,17 @@ clear all;
 
 %% User defined Parameters %%
 % Provide filepath to sample images and labels
-FILE_PATH = 'C:\Users\Michael\Documents\Kaggle\DSB2017\Sample';
-FILE_PATH_LABELS = 'C:\Users\Michael\Documents\Kaggle\DSB2017\stage1_labels.csv';
-PATIENT_NAME = '0d06d764d3c07572074d468b4cff954f';
+% Michael's filepaths
+% FILE_PATH = 'C:\Users\Michael\Documents\Kaggle\DSB2017\Sample';
+% FILE_PATH_LABELS = 'C:\Users\Michael\Documents\Kaggle\DSB2017\stage1_labels.csv';
+
+% Neil's filepaths
+FILE_PATH = 'data\sample_images';
+FILE_PATH_LABELS = 'data\stage1_labels.csv';
+
+EX_PATIENT_NO_CANCER = '0a0c32c9e08cc2ea76a71649de56be6d';
+EX_PATIENT_CANCER = '0d06d764d3c07572074d468b4cff954f';
+PATIENT_NAME = EX_PATIENT_NO_CANCER;
 
 %% The following lines is if the user wishes to define a custom index (3: NUM_SAMPLE)
 % index = 4;
