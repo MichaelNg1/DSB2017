@@ -6,6 +6,7 @@
 
 # Other language-specific filetypes
 *.asv
+*.sublime-*
 
 # compressed files
 *.gz
