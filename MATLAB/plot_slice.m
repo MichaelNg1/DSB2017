@@ -44,8 +44,8 @@ elseif DISPLAY == 2 % Display low rank representation
     error = num2str(norm(sparse_X - double(X),'fro'));
 
     % Visualize original, low rank representation, and error
-    set(gcf, 'Position', [600 600 800 400]);
-    suptitle({fig_name, PATIENT_INFO})
+    % set(gcf, 'Position', [600 600 800 400]);
+  
     subplot(1,3,1); % original
     imshow(X, map);
     title('Original Slice');
@@ -61,6 +61,7 @@ elseif DISPLAY == 2 % Display low rank representation
     colorbar;
     title('Absolute Error');
     xlabel(['L2 error: ' error])        
+    suplabel([fig_name, PATIENT_INFO],'t', [.075 .075 .85 .85])
 end
 drawnow;
 
