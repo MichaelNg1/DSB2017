@@ -29,7 +29,7 @@ def plot_hu_histogram(scan_data):
     plt.show()
 
 
-def plot_3d(image, threshold=-300):
+def plot_3d(image, threshold=-300, save_dir=None):
     """
     Generates and displays a 3D plot of the scan in an upright position.
 
@@ -38,10 +38,12 @@ def plot_3d(image, threshold=-300):
     good for viewing bones.
     https://en.wikipedia.org/wiki/Hounsfield_scale#The_HU_of_common_substances
 
+    NOTE: To view segmented lungs, use a threshold of 0
     WARNING: This plotting function is blocking
 
     @param image The 3D image to plot
     @param threshold The threhold used to generate vertices and faces
+    @param save_dir If not none, saves image to that path
     """
     # Position scan upright so patient head faces top of camera
     p = image.transpose(2, 1, 0)
@@ -59,5 +61,7 @@ def plot_3d(image, threshold=-300):
     ax.set_xlim(0, p.shape[0])
     ax.set_ylim(0, p.shape[1])
     ax.set_zlim(0, p.shape[2])
-
-    plt.show()
+    if save_dir is None:
+        plt.show()
+    else:
+        plt.savefig(save_dir+'.jpg')

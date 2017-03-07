@@ -100,12 +100,11 @@ class Preprocessor(object):
         scan_pixels = self._get_pixels_hu(scan)
         scan_resampled, spacing = self._resample(scan_pixels, scan, [1, 1, 1])
 
-        # TODO: from the tutuorial on segment_lung_mask:
-        # "when you want to use this mask,remember to first apply a dilation
-        #   morphological operation on it" - circular kernel
-        # TODO: determine what to save and how
-        segmented_lungs = self._segment_lung_mask(scan_resampled, False)
+        scan_dilated = morphology.dilation(scan_resampled,
+                                           morphology.ball(1))
+        segmented_lungs = self._segment_lung_mask(scan_dilated, False)
 
+        visualize.plot_3d(segmented_lungs, 0, save_dir=out_dir + scan_name)
         if save:
             save_array = [segmented_lungs, spacing]
             if cancer_id is not None:  # Only append id for training data
@@ -307,10 +306,10 @@ class Preprocessor(object):
 if __name__ == "__main__":
     LABELS_PATH = "data\\stage1_labels.csv"
     SAMPLE_INPUT_FOLDER = "data\\sample_images\\"
-    SAMPLE_OUTPUT_FOLDER = "data\\sample_resampled\\"
+    SAMPLE_OUTPUT_FOLDER = "data\\sample_segmented_lungs\\"
 
     p = Preprocessor(SAMPLE_INPUT_FOLDER, LABELS_PATH)
-    # p.preprocess_all_scans(False)
+    p.preprocess_all_scans(False, SAMPLE_OUTPUT_FOLDER)
 
-    p.preprocess_single_scan(p.patients_list[0], save=True,
-                             out_dir=SAMPLE_OUTPUT_FOLDER)
+    # p.preprocess_single_scan(p.patients_list[0], save=True,
+    #                          out_dir=SAMPLE_OUTPUT_FOLDER)
