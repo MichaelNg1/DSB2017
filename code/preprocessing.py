@@ -19,37 +19,61 @@ from skimage import measure, morphology
 
 import visualize
 
-
 class Preprocessor(object):
     """
     Preprocessing class for segmenting out the lungs.
+    Processed images are saved as:
+        [image, spacing, [cancer]]
+    Train data has the cancer label as a boolean 0 or 1
+    Test data has no label
     """
 
-    def __init__(self, input_folder):
+    def __init__(self, input_folder, labels_path=None):
         """
-        Initialize by loading and sorting input folder
+        Initialize by loading and sorting input folder, and csv file
+        with labels.
+
+        CSV file expects a header, and [name,cancer_id] pairs
+
         @param data_path Path to folder containing scans
+        @param labels_path Filepath for csv containing labels.
         """
         self.input_folder = input_folder
         self.patients_list = os.listdir(input_folder)
         self.patients_list.sort()
+
+        # Read csv labels
+        self.labels = None
+        if labels_path is not None:
+            self.labels = dict()
+
+            f = open(labels_path)
+            for i, row in enumerate(f):
+                if i is 0:  # Skip header row
+                    continue
+                row = row.strip().split(',')
+                self.labels[row[0]] = int(row[1])
 
     def preprocess_all_scans(self, save, out_dir=None):
         """
         Runs preprocessing on all scans in the input folder, saves based
         on arguments. Wrapper around preprocess_single_scan()
 
-        @param save Boolean - whether to save the output or not
+        Saves each scan as out_dir/scan_name.npy
+        The format saved is a numpy array of the following format:
+            [image_data, scan_spacing, [cancer_id]]
+        The cancer_id label is optional, and only exists for training data
+
+        @param save Whether to save the preprocessed scans.
         @param out_dir Only required if saving, directory to output data
         """
         for scan_name in self.patients_list:
             self.preprocess_single_scan(scan_name, save, out_dir)
 
-
     def preprocess_single_scan(self, scan_name, save, out_dir=None):
         """
         Runs the preprocessing - includes loading data, rescaling, and
-        segmenting lungs. If specified, saves output
+        segmenting lungs. If specified, saves output.
 
         @param scan_name String containing the name of the scan
         @param save Boolean - whether to save the output or not
@@ -57,6 +81,17 @@ class Preprocessor(object):
 
         @return Boolean success status
         """
+        # Create directory if it does not exist
+        if save and not os.path.exists(out_dir):
+            os.makedirs(out_dir)
+
+        # If no cancer_id label is found, scan is test data
+        cancer_id = None
+        try:
+            cancer_id = self.labels[scan_name]
+        except:
+            pass
+
         if save and out_dir is None:
             print("No output directory, unable to preprocess scan" + scan_name)
             return False
@@ -64,15 +99,19 @@ class Preprocessor(object):
         # Run preprocessing pipeline
         scan = self._load_scan(self.input_folder + scan_name)
         scan_pixels = self._get_pixels_hu(scan)
-        scan_resampled, spacing = self._resample(scan_pixels, scan,
-                                                 [1, 1, 1])
+        scan_resampled, spacing = self._resample(scan_pixels, scan, [1, 1, 1])
 
-        segmented_lungs = self._segment_lung_mask(scan_resampled, False)
+        if save:
+            save_array = [scan_resampled, spacing]
+            if cancer_id is not None:  # Only append id for training data
+                save_array.append(cancer_id)
+            np.save(out_dir + scan_name, save_array)
 
         # TODO: from the tutuorial on segment_lung_mask:
         # "when you want to use this mask,remember to first apply a dilation
         #   morphological operation on it" - circular kernel
         # TODO: determine what to save and how
+        # segmented_lungs = self._segment_lung_mask(scan_resampled, False)
 
         return True
 
@@ -234,9 +273,46 @@ class Preprocessor(object):
 
         return binary_image
 
+    def _normalize(self, image, min_bound=-1000.0, max_bound=400.0):
+        """
+        Normalizes the data between 0 and 1. Also applies given bounds
+        as a minimum and maximum cutoff for the data.
+        Default bounds are chosen from the common thresholds from LUNA16
+
+        @param image The image to normalize
+        @param min_bound Minimum normalization value
+        @param max_bound Maximum normalization value
+        @return Image normalized between min_bound and max_bound
+        """
+        image = (image - min_bound) / (max_bound - min_bound)
+        image[image > 1] = 1.0
+        image[image < 0] = 0.0
+        return image
+
+    def _zero_center(self, image, pixel_mean=0.25):
+        """
+        Zero centers the input image such that the mean value is 0.
+        The default pixel mean is approximated using data from the LUNA16
+        competition.
+        A true value would average all values in the dataset and use the result
+        as the pixel_mean.
+
+        @param image The image to zero center
+        @param pixel_mean The mean used to zero center the data.
+        @return Zero centered image
+        """
+        image = image - pixel_mean
+        return image
+
 
 if __name__ == "__main__":
-    INPUT_FOLDER = "data\\sample_images\\"
+    LABELS_PATH = "data\\stage1_labels.csv"
+    SAMPLE_INPUT_FOLDER = "data\\sample_images\\"
+    SAMPLE_OUTPUT_FOLDER = "data\\sample_resampled\\"
 
-    p = Preprocessor(INPUT_FOLDER)
-    p.preprocess_single_scan(p.patients_list[0], save=False)
+    p = Preprocessor(SAMPLE_INPUT_FOLDER, LABELS_PATH)
+    # p.preprocess_all_scans(False)
+
+
+    p.preprocess_single_scan(p.patients_list[0], save=True,
+                             out_dir=SAMPLE_OUTPUT_FOLDER)

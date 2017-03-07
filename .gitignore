@@ -3,6 +3,7 @@
 *.csv
 *.tfrecords
 *.txt
+*.npy
 
 # Other language-specific filetypes
 *.asv
