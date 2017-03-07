@@ -2,7 +2,7 @@
 Author: Neil Jassal
 Email: neil.jassal@gmail.com
 
-Updated 3/4/2017
+Updated 3/6/2017
 
 Preprocessing of DSB 2017 data. Adapted from:
 https://www.kaggle.com/gzuidhof/data-science-bowl-2017/full-preprocessing-tutorial
@@ -10,7 +10,6 @@ https://www.kaggle.com/gzuidhof/data-science-bowl-2017/full-preprocessing-tutori
 import os
 
 import numpy as np  # linear algebra
-import pandas as pd  # data processing, csv I/O
 import dicom
 import scipy.ndimage
 
@@ -101,23 +100,24 @@ class Preprocessor(object):
         scan_pixels = self._get_pixels_hu(scan)
         scan_resampled, spacing = self._resample(scan_pixels, scan, [1, 1, 1])
 
-        if save:
-            save_array = [scan_resampled, spacing]
-            if cancer_id is not None:  # Only append id for training data
-                save_array.append(cancer_id)
-            np.save(out_dir + scan_name, save_array)
-
         # TODO: from the tutuorial on segment_lung_mask:
         # "when you want to use this mask,remember to first apply a dilation
         #   morphological operation on it" - circular kernel
         # TODO: determine what to save and how
-        # segmented_lungs = self._segment_lung_mask(scan_resampled, False)
+        segmented_lungs = self._segment_lung_mask(scan_resampled, False)
+
+        embed()
+        if save:
+            save_array = [segmented_lungs, spacing]
+            if cancer_id is not None:  # Only append id for training data
+                save_array.append(cancer_id)
+            np.save(out_dir + scan_name, save_array)
 
         return True
 
     def _load_scan(self, path):
         """
-        Loads scans in the given folder path
+        Loads a single scan in the given folder path
         @param path Filepath for the scan
         @return slices
         """
@@ -312,7 +312,6 @@ if __name__ == "__main__":
 
     p = Preprocessor(SAMPLE_INPUT_FOLDER, LABELS_PATH)
     # p.preprocess_all_scans(False)
-
 
     p.preprocess_single_scan(p.patients_list[0], save=True,
                              out_dir=SAMPLE_OUTPUT_FOLDER)
