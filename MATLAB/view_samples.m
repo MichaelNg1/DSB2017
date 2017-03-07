@@ -19,12 +19,12 @@ global DISPLAY PATIENT_INFO SAMPLE_FILES_LIST VARIANCE index;
 % Provide filepath to sample images and labels
 
 % Michael's filepaths
-FILE_PATH = 'C:\Users\Michael\Documents\Kaggle\DSB2017\Sample';
-FILE_PATH_LABELS = 'C:\Users\Michael\Documents\Kaggle\DSB2017\stage1_labels.csv';
+% FILE_PATH = 'C:\Users\Michael\Documents\Kaggle\DSB2017\Sample';
+% FILE_PATH_LABELS = 'C:\Users\Michael\Documents\Kaggle\DSB2017\stage1_labels.csv';
 
 % Neil's filepaths
-% FILE_PATH = 'data\sample_images';
-% FILE_PATH_LABELS = 'data\stage1_labels.csv';
+FILE_PATH = 'data\sample_images';
+FILE_PATH_LABELS = 'data\stage1_labels.csv';
 
 % Patient and Processing Parameters
 EX_PATIENT_NO_CANCER = '0a0c32c9e08cc2ea76a71649de56be6d';

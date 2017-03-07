@@ -106,7 +106,6 @@ class Preprocessor(object):
         # TODO: determine what to save and how
         segmented_lungs = self._segment_lung_mask(scan_resampled, False)
 
-        embed()
         if save:
             save_array = [segmented_lungs, spacing]
             if cancer_id is not None:  # Only append id for training data
