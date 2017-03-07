@@ -7,7 +7,7 @@ Updated 3/6/2017
 Preprocessing of DSB 2017 data. Adapted from:
 https://www.kaggle.com/gzuidhof/data-science-bowl-2017/full-preprocessing-tutorial
 """
-import os
+import os, time
 
 import numpy as np  # linear algebra
 import dicom
@@ -53,7 +53,7 @@ class Preprocessor(object):
                 row = row.strip().split(',')
                 self.labels[row[0]] = int(row[1])
 
-    def preprocess_all_scans(self, save, out_dir=None):
+    def preprocess_all_scans(self, save, out_dir=None, verbose=True):
         """
         Runs preprocessing on all scans in the input folder, saves based
         on arguments. Wrapper around preprocess_single_scan()
@@ -65,9 +65,18 @@ class Preprocessor(object):
 
         @param save Whether to save the preprocessed scans.
         @param out_dir Only required if saving, directory to output data
+        @param verbose Print runtime stats
         """
+        total_time = 0
+        num_iters = 1
         for scan_name in self.patients_list:
+            start_time = time.time()
             self.preprocess_single_scan(scan_name, save, out_dir)
+            total_time += (time.time() - start_time)
+            num_iters += 1
+        if verbose:
+            print("Total time for ", num_iters, " iters: ", total_time)
+            print("Average time per iter: ", total_time / num_iters)
 
     def preprocess_single_scan(self, scan_name, save, out_dir=None):
         """
@@ -104,7 +113,6 @@ class Preprocessor(object):
                                            morphology.ball(1))
         segmented_lungs = self._segment_lung_mask(scan_dilated, False)
 
-        visualize.plot_3d(segmented_lungs, 0, save_dir=out_dir + scan_name)
         if save:
             save_array = [segmented_lungs, spacing]
             if cancer_id is not None:  # Only append id for training data
