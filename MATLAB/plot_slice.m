@@ -61,7 +61,7 @@ elseif DISPLAY == 2 % Display low rank representation
     colorbar;
     title('Absolute Error');
     xlabel(['L2 error: ' error])        
-    suplabel([fig_name, PATIENT_INFO],'t', [.075 .075 .85 .85])
+    suplabel([fig_name ' | ' PATIENT_INFO],'t', [.075 .075 .85 .85])
 end
 drawnow;
 
