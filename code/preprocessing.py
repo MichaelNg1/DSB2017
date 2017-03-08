@@ -53,7 +53,8 @@ class Preprocessor(object):
                 row = row.strip().split(',')
                 self.labels[row[0]] = int(row[1])
 
-    def preprocess_all_scans(self, save, out_dir=None, verbose=True):
+    def preprocess_all_scans(self, save, out_dir=None, num_scans=None,
+                             scan_start=0, verbose=True):
         """
         Runs preprocessing on all scans in the input folder, saves based
         on arguments. Wrapper around preprocess_single_scan()
@@ -65,23 +66,44 @@ class Preprocessor(object):
 
         @param save Whether to save the preprocessed scans.
         @param out_dir Only required if saving, directory to output data
-        @param verbose Print runtime stats
+        @param num_scans How many scans to process. If fewer scans exist than
+            specified, will process all scans
+        @param scan_start Scan index to begin at. Allows for only processing
+            scans starting at a given sorted index. Best used in conjunction
+            with num_scans to for batch preprocessing.
+        @param verbose Print runtime timing stats
         """
-        total_time = 0
-        num_iters = 1
-        for scan_name in self.patients_list:
+        log_rate = 20
+        times = []
+        log_times = []
+        for i, scan_name in enumerate(self.patients_list):
+            if i < scan_start:  # start at scan_start
+                continue
+            if num_scans is not None:  # break if num_scans preprocessed
+                if i >= scan_start + num_scans:
+                    break
+
+            # Run preprocessing with timer
             start_time = time.time()
             self.preprocess_single_scan(scan_name, save, out_dir)
-            total_time += (time.time() - start_time)
-            num_iters += 1
-        if verbose:
-            print("Total time for ", num_iters, " iters: ", total_time)
-            print("Average time per iter: ", total_time / num_iters)
+            end_time = time.time() - start_time
+            log_times.append(end_time)
+            times.append(end_time)
 
-    def preprocess_single_scan(self, scan_name, save, out_dir=None):
+            if verbose and i % log_rate is 0:
+                print("Completed ", i, "iters, average preprocess time: ",
+                      sum(log_times) / len(log_times))
+                log_times = []
+
+        if verbose:
+            print("Total time for ", len(times), " iters: ", sum(times))
+            print("Average time per iter: ", sum(times) / len(times))
+
+    def preprocess_single_scan(self, scan_name, save, out_dir=None,
+                               verbose=True):
         """
-        Runs the preprocessing - includes loading data, rescaling, and
-        segmenting lungs. If specified, saves output.
+        Runs the preprocessing - includes loading data, rescaling, segmenting
+        lungs, and zero centering. If specified, saves output.
 
         @param scan_name String containing the name of the scan
         @param save Boolean - whether to save the output or not
@@ -89,6 +111,10 @@ class Preprocessor(object):
 
         @return Boolean success status
         """
+        if save and out_dir is None:
+            print("No output directory, unable to preprocess scan" + scan_name)
+            return False
+
         # Create directory if it does not exist
         if save and not os.path.exists(out_dir):
             os.makedirs(out_dir)
@@ -99,10 +125,6 @@ class Preprocessor(object):
             cancer_id = self.labels[scan_name]
         except:
             pass
-
-        if save and out_dir is None:
-            print("No output directory, unable to preprocess scan" + scan_name)
-            return False
 
         # Run preprocessing pipeline
         scan = self._load_scan(self.input_folder + scan_name)
@@ -279,11 +301,35 @@ class Preprocessor(object):
 
         return binary_image
 
-    def _normalize(self, image, min_bound=-1000.0, max_bound=400.0):
+    def zero_center(self, image, pixel_mean=0.25,
+                     min_bound=-1000.0, max_bound=400.0):
+        """
+        Zero centers the input image such that the mean value is 0.
+        The default parameters are approximated using data from the LUNA16
+        competition.
+
+        A true pixel_mean would average all values in the dataset and use
+        the result as the pixel_mean. This however is very slow and has little
+        experimental effects on the result.
+
+        @param image The image to zero center
+        @param pixel_mean The mean used to zero center the data.
+        @param min_bound Minimum pixel value bounds, clamped below value
+        @param max_bound Maximum pixel value bounds, clamped above value
+        @return Zero centered image
+        """
+        pixel_corr = int((max_bound - min_bound) * pixel_mean)
+        image = image - pixel_corr
+        return image
+
+    def normalize(self, image, min_bound=-1000.0, max_bound=400.0):
         """
         Normalizes the data between 0 and 1. Also applies given bounds
         as a minimum and maximum cutoff for the data.
         Default bounds are chosen from the common thresholds from LUNA16
+
+        NOTE: Due to compression and speed, it is recommended to run
+        normalization online.
 
         @param image The image to normalize
         @param min_bound Minimum normalization value
@@ -295,29 +341,20 @@ class Preprocessor(object):
         image[image < 0] = 0.0
         return image
 
-    def _zero_center(self, image, pixel_mean=0.25):
-        """
-        Zero centers the input image such that the mean value is 0.
-        The default pixel mean is approximated using data from the LUNA16
-        competition.
-        A true value would average all values in the dataset and use the result
-        as the pixel_mean.
-
-        @param image The image to zero center
-        @param pixel_mean The mean used to zero center the data.
-        @return Zero centered image
-        """
-        image = image - pixel_mean
-        return image
-
 
 if __name__ == "__main__":
     LABELS_PATH = "data\\stage1_labels.csv"
     SAMPLE_INPUT_FOLDER = "data\\sample_images\\"
     SAMPLE_OUTPUT_FOLDER = "data\\sample_segmented_lungs\\"
+    INPUT_FOLDER = "data\\stage1\\"
+    OUTPUT_FOLDER = "data\\stage1_preprocessed\\"
 
-    p = Preprocessor(SAMPLE_INPUT_FOLDER, LABELS_PATH)
-    p.preprocess_all_scans(False, SAMPLE_OUTPUT_FOLDER)
+    start_scan = 290
+    num_scans = 210
+
+    p = Preprocessor(INPUT_FOLDER, LABELS_PATH)
+    p.preprocess_all_scans(True, OUTPUT_FOLDER, num_scans=num_scans,
+                           scan_start=start_scan, verbose=True)
 
     # p.preprocess_single_scan(p.patients_list[0], save=True,
     #                          out_dir=SAMPLE_OUTPUT_FOLDER)
