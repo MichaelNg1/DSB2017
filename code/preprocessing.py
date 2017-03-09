@@ -168,6 +168,8 @@ class Preprocessor(object):
             # a divide by 0 later when resampling the scan. Instead, sampling
             # the 1st and 10th slices and averaging reasonably approximates
             # slice thickness.
+            # Fix is based on:
+            # https://www.kaggle.com/gzuidhof/data-science-bowl-2017/full-preprocessing-tutorial#160406
             slice_thickness = np.abs(slices[0].ImagePositionPatient[2] -
                                      slices[10].ImagePositionPatient[2]) / 10
         except:
