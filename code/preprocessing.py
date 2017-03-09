@@ -14,19 +14,40 @@ import numpy as np  # linear algebra
 import dicom
 import scipy.ndimage
 
-from IPython import embed
 from skimage import measure, morphology
 
 
 class PreprocessorSettings(object):
     """
-    Contains various preprocessor settings.
+    Contains various preprocessor settings. Specified parameters are used
+    during the preprocessing pipeline.
+
+    Note that zero-centering and normalization are expected to be online
+    functions run before scans are entered into training network. These do not
+    use PreprocessorSettings.
+
     Initialized to recommended defaults.
     """
 
     def __init__(self):
+        """
+        Initializes preprocessing pipeline settings
+        """
+        # When preprocessing multiple scans, displays logging information
+        # every log_rate scans.
         self.log_rate = 20
+        # Image is dilated with a ball-shaped kernel before lung segmentation
+        # To better discern the network inside the lungs. Parmater specifies
+        # radius of the ball. Used during the preprocessing pipeline.
         self.dilation_ball_radius = 1
+        # Used during _resample(). Pixel spacing to use when resampling.
+        self.resample_spacing = [1, 1, 1]
+        # Used during _segment_lung_mask(). Boolean as to whether to fill in
+        # structures in the lung during segmentation.
+        self.fill_lung_structures = False
+        # Used during _segment_lung_mask(). Value denotes HU value to initially
+        # threshold the image by before creating the segmentation mask.
+        self.lung_segmentation_threshold = -320
 
 
 class Preprocessor(object):
@@ -152,12 +173,17 @@ class Preprocessor(object):
         # Run preprocessing pipeline
         scan = self._load_scan(self.input_folder + scan_name)
         scan_pixels = self._get_pixels_hu(scan)
-        scan_resampled, spacing = self._resample(scan_pixels, scan, [1, 1, 1])
+        spacing = self.settings.resample_spacing
+        scan_resampled, spacing = self._resample(
+            scan_pixels, scan, self.settings.resample_spacing)
 
         radius = self.settings.dilation_ball_radius
         scan_dilated = morphology.dilation(scan_resampled,
                                            morphology.ball(radius))
-        segmented_lungs = self._segment_lung_mask(scan_dilated, False)
+        segmented_lungs = self._segment_lung_mask(
+            scan_dilated,
+            fill_lung_structures=self.settings.fill_lung_structures,
+            threshold=self.settings.lung_segmentation_threshold)
 
         if save:
             save_array = [segmented_lungs, spacing]
@@ -247,7 +273,7 @@ class Preprocessor(object):
         @param new_spacing Updated spacing for 3D scan
 
         @return image Image resampled to have updated pixel spacing
-        @return new_spacing Updated pixel spacing TODO update description
+        @return new_spacing Updated pixel spacing
         """
         # Get current pixel spacing
         spacing = np.array([scan[0].SliceThickness] + scan[0].PixelSpacing,
@@ -280,7 +306,7 @@ class Preprocessor(object):
         else:
             return None
 
-    def _segment_lung_mask(self, image, fill_lung_structures=True,
+    def _segment_lung_mask(self, image, fill_lung_structures=False,
                            threshold=-320):
         """
         Segments the lungs and area around it. Steps:
@@ -378,12 +404,13 @@ if __name__ == "__main__":
     SAMPLE_OUTPUT_FOLDER = "data\\sample_segmented_lungs\\"
 
     INPUT_FOLDER = "data\\stage1\\"
+    INPUT_FOLDER2 = "data\\stage1\\stage1\\"
     OUTPUT_FOLDER = "data\\stage1_preprocessed\\"
 
-    start_scan = 1135
+    start_scan = None
     num_scans = None
 
-    p = Preprocessor(INPUT_FOLDER, LABELS_PATH, PreprocessorSettings())
+    p = Preprocessor(INPUT_FOLDER2, LABELS_PATH, PreprocessorSettings())
     p.preprocess_all_scans(save=True, out_dir=OUTPUT_FOLDER,
                            num_scans=num_scans, scan_start=start_scan,
                            verbose=True)
