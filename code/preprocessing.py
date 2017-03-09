@@ -7,7 +7,8 @@ Updated 3/6/2017
 Preprocessing of DSB 2017 data. Adapted from:
 https://www.kaggle.com/gzuidhof/data-science-bowl-2017/full-preprocessing-tutorial
 """
-import os, time
+import os
+import time
 
 import numpy as np  # linear algebra
 import dicom
@@ -16,11 +17,16 @@ import scipy.ndimage
 from IPython import embed
 from skimage import measure, morphology
 
-import visualize
 
 class Preprocessor(object):
     """
     Preprocessing class for segmenting out the lungs.
+
+    Also contains functions for zero-centering and normalizing the image
+    data within specified bounds. Zero-centering and normalization are
+    recommended to be done as an offline process - both are slow and cause
+    significant increases in filesizes.
+
     Processed images are saved as:
         [image, spacing, [cancer]]
     Train data has the cancer label as a boolean 0 or 1
@@ -54,7 +60,7 @@ class Preprocessor(object):
                 self.labels[row[0]] = int(row[1])
 
     def preprocess_all_scans(self, save, out_dir=None, num_scans=None,
-                             scan_start=0, verbose=True):
+                             scan_start=None, verbose=True):
         """
         Runs preprocessing on all scans in the input folder, saves based
         on arguments. Wrapper around preprocess_single_scan()
@@ -73,6 +79,9 @@ class Preprocessor(object):
             with num_scans to for batch preprocessing.
         @param verbose Print runtime timing stats
         """
+        if scan_start is None:
+            scan_start = 0
+
         log_rate = 20
         times = []
         log_times = []
@@ -91,7 +100,8 @@ class Preprocessor(object):
             times.append(end_time)
 
             if verbose and i % log_rate is 0:
-                print("Completed ", i, "iters, average preprocess time: ",
+                print("Completed ", i - scan_start,
+                      "iters, average preprocess time: ",
                       sum(log_times) / len(log_times))
                 log_times = []
 
@@ -154,8 +164,12 @@ class Preprocessor(object):
 
         # Fill in SliceThickness parameter
         try:
+            # slices[0] and slices[1] are equal in a few scans. This causes
+            # a divide by 0 later when resampling the scan. Instead, sampling
+            # the 1st and 10th slices and averaging reasonably approximates
+            # slice thickness.
             slice_thickness = np.abs(slices[0].ImagePositionPatient[2] -
-                                     slices[1].ImagePositionPatient[2])
+                                     slices[10].ImagePositionPatient[2]) / 10
         except:
             slice_thickness = np.abs(slices[0].SliceLocation -
                                      slices[1].SliceLocation)
@@ -222,7 +236,6 @@ class Preprocessor(object):
         # Get current pixel spacing
         spacing = np.array([scan[0].SliceThickness] + scan[0].PixelSpacing,
                            dtype=np.float32)
-
         resize_factor = spacing / new_spacing
         new_real_shape = image.shape * resize_factor
         new_shape = np.round(new_real_shape)
@@ -302,7 +315,7 @@ class Preprocessor(object):
         return binary_image
 
     def zero_center(self, image, pixel_mean=0.25,
-                     min_bound=-1000.0, max_bound=400.0):
+                    min_bound=-1000.0, max_bound=400.0):
         """
         Zero centers the input image such that the mean value is 0.
         The default parameters are approximated using data from the LUNA16
@@ -344,17 +357,22 @@ class Preprocessor(object):
 
 if __name__ == "__main__":
     LABELS_PATH = "data\\stage1_labels.csv"
+
     SAMPLE_INPUT_FOLDER = "data\\sample_images\\"
     SAMPLE_OUTPUT_FOLDER = "data\\sample_segmented_lungs\\"
+
     INPUT_FOLDER = "data\\stage1\\"
     OUTPUT_FOLDER = "data\\stage1_preprocessed\\"
 
-    start_scan = 290
-    num_scans = 210
+    start_scan = 1135
+    num_scans = None
 
     p = Preprocessor(INPUT_FOLDER, LABELS_PATH)
-    p.preprocess_all_scans(True, OUTPUT_FOLDER, num_scans=num_scans,
-                           scan_start=start_scan, verbose=True)
+    p.preprocess_all_scans(save=True, out_dir=OUTPUT_FOLDER,
+                           num_scans=num_scans, scan_start=start_scan,
+                           verbose=True)
 
-    # p.preprocess_single_scan(p.patients_list[0], save=True,
-    #                          out_dir=SAMPLE_OUTPUT_FOLDER)
+    # p.preprocess_single_scan('70671fa94231eb377e8ac7cba4650dfb', save=False,
+    #                          out_dir=OUTPUT_FOLDER)
+    # p.preprocess_single_scan('b8bb02d229361a623a4dc57aa0e5c485', save=False,
+    #                          out_dir=OUTPUT_FOLDER)

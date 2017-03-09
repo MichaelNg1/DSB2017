@@ -8,8 +8,9 @@ Various data visualization functions
 """
 import matplotlib.pyplot as plt
 
-from skimage import measure, morphology
+from skimage import measure
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+
 
 def plot_hu_histogram(scan_data):
     """
@@ -64,4 +65,4 @@ def plot_3d(image, threshold=-300, save_dir=None):
     if save_dir is None:
         plt.show()
     else:
-        plt.savefig(save_dir+'.jpg')
+        plt.savefig(save_dir + '.jpg')
