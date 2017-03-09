@@ -18,6 +18,17 @@ from IPython import embed
 from skimage import measure, morphology
 
 
+class PreprocessorSettings(object):
+    """
+    Contains various preprocessor settings.
+    Initialized to recommended defaults.
+    """
+
+    def __init__(self):
+        self.log_rate = 20
+        self.dilation_ball_radius = 1
+
+
 class Preprocessor(object):
     """
     Preprocessing class for segmenting out the lungs.
@@ -33,7 +44,8 @@ class Preprocessor(object):
     Test data has no label
     """
 
-    def __init__(self, input_folder, labels_path=None):
+    def __init__(self, input_folder, labels_path=None,
+                 settings=PreprocessorSettings):
         """
         Initialize by loading and sorting input folder, and csv file
         with labels.
@@ -46,6 +58,8 @@ class Preprocessor(object):
         self.input_folder = input_folder
         self.patients_list = os.listdir(input_folder)
         self.patients_list.sort()
+
+        self.settings = settings
 
         # Read csv labels
         self.labels = None
@@ -82,7 +96,6 @@ class Preprocessor(object):
         if scan_start is None:
             scan_start = 0
 
-        log_rate = 20
         times = []
         log_times = []
         for i, scan_name in enumerate(self.patients_list):
@@ -95,14 +108,14 @@ class Preprocessor(object):
             # Run preprocessing with timer
             start_time = time.time()
             self.preprocess_single_scan(scan_name, save, out_dir)
-            end_time = time.time() - start_time
-            log_times.append(end_time)
-            times.append(end_time)
+            log_times.append(time.time() - start_time)
 
-            if verbose and i % log_rate is 0:
-                print("Completed ", i - scan_start,
-                      "iters, average preprocess time: ",
-                      sum(log_times) / len(log_times))
+            if verbose and i % self.settings.log_rate is 0:
+                print("Completed scan ", i,
+                      ", iters: ", i - scan_start,
+                      ", average preprocess time: ",
+                      sum(log_times) / len(log_times), sep="")
+                times.extend(log_times)
                 log_times = []
 
         if verbose:
@@ -141,8 +154,9 @@ class Preprocessor(object):
         scan_pixels = self._get_pixels_hu(scan)
         scan_resampled, spacing = self._resample(scan_pixels, scan, [1, 1, 1])
 
+        radius = self.settings.dilation_ball_radius
         scan_dilated = morphology.dilation(scan_resampled,
-                                           morphology.ball(1))
+                                           morphology.ball(radius))
         segmented_lungs = self._segment_lung_mask(scan_dilated, False)
 
         if save:
@@ -369,7 +383,7 @@ if __name__ == "__main__":
     start_scan = 1135
     num_scans = None
 
-    p = Preprocessor(INPUT_FOLDER, LABELS_PATH)
+    p = Preprocessor(INPUT_FOLDER, LABELS_PATH, PreprocessorSettings())
     p.preprocess_all_scans(save=True, out_dir=OUTPUT_FOLDER,
                            num_scans=num_scans, scan_start=start_scan,
                            verbose=True)
