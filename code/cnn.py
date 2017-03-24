@@ -7,12 +7,21 @@ Updated 3/4232017
 Implementation of Convolutional Neural Network
 Adapted from:
 https://www.kaggle.com/sentdex/data-science-bowl-2017/first-pass-through-data-w-3d-convnet
+
+TODO: Update CNN class so different network setups can be called via
+function. Allows for flexible testing
 """
+import os
 
 import tensorflow as tf
 import numpy as np
 
-IMG_SIZE_PX = 50
+from IPython import embed
+
+import preprocessing
+
+max_dims = np.array([0,0,0])
+total_pixels = 0
 SLICE_COUNT = 20
 
 n_classes = 2
@@ -44,6 +53,7 @@ def maxpool3d(x, ksize=[1, 2, 2, 2, 1], strides=[1, 2, 2, 2, 1]):
     """
     return tf.nn.max_pool3d(x, ksize=ksize, strides=strides, padding='SAME')
 
+
 def cnn(x):
     """
     Creates tensorflow graph for cnn
@@ -55,7 +65,7 @@ def cnn(x):
     weights = {
         'W_conv1': tf.Variable(tf.random_normal([3, 3, 3, 1, 32])),
         'W_conv2': tf.Variable(tf.random_normal([3, 3, 3, 32, 64])),
-        'W_fc': tf.Variable(tf.random_normal([54080, 1024])),
+        'W_fc': tf.Variable(tf.random_normal([total_pixels, 1024])),
         'out': tf.Variable(tf.random_normal([1024, n_classes]))
     }
 
@@ -68,7 +78,7 @@ def cnn(x):
     }
 
     # Reshape into [-1, image x, image y, image z, 1])
-    x = tf.reshape(x, shape=[-1, IMG_SIZE_PX, IMG_SIZE_PX, SLICE_COUNT, 1])
+    x = tf.reshape(x, shape=[-1, max_dims[0], max_dims[1], max_dims[2], 1])
 
     # Create convolutional layers
     conv1 = tf.nn.relu(conv3d(x, weights['W_conv1']) + biases['b_conv1'])
@@ -79,7 +89,7 @@ def cnn(x):
 
     # Fully connected layer with dropout
     # 54080 chosen arbitrarily TODO
-    fc = tf.reshape(conv2, [-1, 54080])
+    fc = tf.reshape(conv2, [-1, total_pixels])
     fc = tf.nn.relu(tf.matmul(fc, weights['W_fc']) + biases['b_fc'])
     fc = tf.nn.dropout(fc, keep_rate)
 
@@ -87,5 +97,96 @@ def cnn(x):
     return output
 
 
-if __name__ == "__main__"():
+if __name__ == "__main__":
+
     # load data
+    DATA_FOLDER = "data\\stage1_preprocessed\\"
+    SAMPLE_FOLDER = "data\\sample_preprocessed\\"
+
+    INPUT_FOLDER = SAMPLE_FOLDER
+    preprocess_list = os.listdir(INPUT_FOLDER)
+
+    # Online preprocessing steps when data is read:
+    #   Normalize data
+    #   Zero-center data
+    #   Pad 3D images to be equally sized
+    # Get max padding bounds before network training
+    max_dims = preprocessing.get_max_bounds(INPUT_FOLDER, preprocess_list)
+    total_pixels = max_dims[0]*max_dims[1]*max_dims[2]
+    print(total_pixels)
+
+    ######### TRAIN_NEURAL_NETWORK #####
+    # TODO put this in function, rest of CNN goes in class
+    # to load item, np.load('elem.npy')
+    train_data = preprocess_list[:-2]  # All but last 2 elements
+    validation_data = preprocess_list[-2:]  # Last 2 elements
+
+    prediction = cnn(x)
+    cost = tf.reduce_mean(
+        tf.nn.softmax_cross_entropy_with_logits(logits=prediction, labels=y))
+    optimizer = tf.train.AdamOptimizer(learning_rate=1e-3).minimize(cost)
+
+    hm_epochs = 1
+
+    # Given, below is session init with timeout
+    # with tf.Session() as sess:
+    #     sess.run(tf.initialize_all_variables())
+
+    # setup and initialize session
+    config = tf.ConfigProto()
+    config.operation_timeout_in_ms = 10000
+    sess = tf.InteractiveSession()
+    init_op = tf.group(tf.global_variables_initializer(),
+                       tf.local_variables_initializer())
+    sess.run(init_op)
+    tf.train.start_queue_runners(sess=sess)
+
+    successful_runs = 0
+    total_runs = 0
+    for epoch in range(hm_epochs):
+        epoch_loss = 0
+
+        for filename in train_data:
+            data = np.load(INPUT_FOLDER + filename)
+
+            # Pad image
+            pad_size = max_dims - data[0].shape
+            data[0] = np.pad(
+                data[0],
+                ((0, pad_size[0]), (0, pad_size[1]), (0, pad_size[2])),
+                'constant')
+            print(data[0].shape)
+            # Run normalization, zero-centering
+
+            total_runs += 1
+
+            # # Run the optimizer
+            # X = data[0]
+            # Y = data[2]
+            # _, c = sess.run([optimizer, cost], feed_dict={x:X,y:Y})
+
+            # Actual code from tutorial
+            try:  # TODO THIS FAILS CONTINUALLY THEN HANGS
+                X = data[0]
+                Y = data[2]
+                _, c = sess.run([optimizer, cost], feed_dict={x: X, y: Y})
+                epoch_loss += c
+                successful_runs += 1
+                print('success', c)
+            except Exception as e:
+                print('failed to read', filename)
+
+        print('Epoch', epoch + 1, 'completed out of',
+              hm_epochs, 'loss:', epoch_loss)
+
+        correct = tf.equal(tf.argmax(prediction, 1), tf.argmax(y, 1))
+        accuracy = tf.reduce_mean(tf.cast(correct, 'float'))
+
+        print('Accuracy:',accuracy.eval({x:[i[0] for i in validation_data], y:[i[1] for i in validation_data]}))
+
+        print('Done. Finishing accuracy:')
+        print('Accuracy:',accuracy.eval({x:[i[0] for i in validation_data], y:[i[1] for i in validation_data]}))
+
+        print('fitment percent:', successful_runs / total_runs)
+
+

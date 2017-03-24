@@ -2,7 +2,7 @@
 Author: Neil Jassal
 Email: neil.jassal@gmail.com
 
-Updated 3/6/2017
+Updated 3/24/2017
 
 Preprocessing of DSB 2017 data. Adapted from:
 https://www.kaggle.com/gzuidhof/data-science-bowl-2017/full-preprocessing-tutorial
@@ -356,52 +356,76 @@ class Preprocessor(object):
 
         return binary_image
 
-    def zero_center(self, image, pixel_mean=0.25,
-                    min_bound=-1000.0, max_bound=400.0):
-        """
-        Zero centers the input image such that the mean value is 0.
-        The default parameters are approximated using data from the LUNA16
-        competition.
 
-        A true pixel_mean would average all values in the dataset and use
-        the result as the pixel_mean. This however is very slow and has little
-        experimental effects on the result.
+def zero_center(image, pixel_mean=0.25,
+                min_bound=-1000.0, max_bound=400.0):
+    """
+    Zero centers the input image such that the mean value is 0.
+    The default parameters are approximated using data from the LUNA16
+    competition.
 
-        @param image The image to zero center
-        @param pixel_mean The mean used to zero center the data.
-        @param min_bound Minimum pixel value bounds, clamped below value
-        @param max_bound Maximum pixel value bounds, clamped above value
-        @return Zero centered image
-        """
-        pixel_corr = int((max_bound - min_bound) * pixel_mean)
-        image = image - pixel_corr
-        return image
+    A true pixel_mean would average all values in the dataset and use
+    the result as the pixel_mean. This however is very slow and has little
+    experimental effects on the result.
 
-    def normalize(self, image, min_bound=-1000.0, max_bound=400.0):
-        """
-        Normalizes the data between 0 and 1. Also applies given bounds
-        as a minimum and maximum cutoff for the data.
-        Default bounds are chosen from the common thresholds from LUNA16
+    @param image The image to zero center
+    @param pixel_mean The mean used to zero center the data.
+    @param min_bound Minimum pixel value bounds, clamped below value
+    @param max_bound Maximum pixel value bounds, clamped above value
+    @return Zero centered image
+    """
+    pixel_corr = int((max_bound - min_bound) * pixel_mean)
+    image = image - pixel_corr
+    return image
 
-        NOTE: Due to compression and speed, it is recommended to run
-        normalization online.
 
-        @param image The image to normalize
-        @param min_bound Minimum normalization value
-        @param max_bound Maximum normalization value
-        @return Image normalized between min_bound and max_bound
-        """
-        image = (image - min_bound) / (max_bound - min_bound)
-        image[image > 1] = 1.0
-        image[image < 0] = 0.0
-        return image
+def normalize(image, min_bound=-1000.0, max_bound=400.0):
+    """
+    Normalizes the data between 0 and 1. Also applies given bounds
+    as a minimum and maximum cutoff for the data.
+    Default bounds are chosen from the common thresholds from LUNA16
+
+    NOTE: Due to compression and speed, it is recommended to run
+    normalization online.
+
+    @param image The image to normalize
+    @param min_bound Minimum normalization value
+    @param max_bound Maximum normalization value
+    @return Image normalized between min_bound and max_bound
+    """
+    image = (image - min_bound) / (max_bound - min_bound)
+    image[image > 1] = 1.0
+    image[image < 0] = 0.0
+    return image
+
+
+def get_max_bounds(input_folder, preprocess_list):
+    """
+    Determines the [r, c, z] maximum bounds of all files specified to
+    the preprocessor. The main purpose of this function is to accurately
+    be able to pad each input image into a CNN. To conserve memory during
+    runtime, padding should be not be done simultaneously on all images.
+
+    This function is meant to be run online, and as such requires a list
+    of filenames for .npy files. These files are meant to be used from
+    the result of Preprocessor.preprocess_all_scans().
+
+    @param input_folder Directory to read files from
+    @param preprocess_list List of .npy files to find max dimensions of
+    @return [r,c,z] Maximum size in 3D image dimensions
+    """
+    dims = np.array([0, 0, 0])
+    for filename in preprocess_list:
+        data = np.load(input_folder + filename)
+        dims = np.maximum(dims, data[0].shape)
+    return dims
 
 
 if __name__ == "__main__":
     LABELS_PATH = "data\\stage1_labels.csv"
 
     SAMPLE_INPUT_FOLDER = "data\\sample_images\\"
-    SAMPLE_OUTPUT_FOLDER = "data\\sample_segmented_lungs\\"
+    SAMPLE_OUTPUT_FOLDER = "data\\sample_preprocessed\\"
 
     INPUT_FOLDER = "data\\stage1\\"
     INPUT_FOLDER2 = "data\\stage1\\stage1\\"
@@ -410,8 +434,17 @@ if __name__ == "__main__":
     start_scan = None
     num_scans = None
 
-    p = Preprocessor(INPUT_FOLDER2, LABELS_PATH, PreprocessorSettings())
-    p.preprocess_all_scans(save=True, out_dir=OUTPUT_FOLDER,
+    settings = PreprocessorSettings()
+    settings.log_rate = 1
+
+    # p = Preprocessor(INPUT_FOLDER2, LABELS_PATH, PreprocessorSettings())
+    # p.preprocess_all_scans(save=True, out_dir=OUTPUT_FOLDER,
+    #                        num_scans=num_scans, scan_start=start_scan,
+    #                        verbose=True)
+
+
+    p = Preprocessor(SAMPLE_INPUT_FOLDER, LABELS_PATH, settings)
+    p.preprocess_all_scans(save=True, out_dir=SAMPLE_OUTPUT_FOLDER,
                            num_scans=num_scans, scan_start=start_scan,
                            verbose=True)
 
