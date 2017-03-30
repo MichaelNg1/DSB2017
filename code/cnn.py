@@ -35,8 +35,11 @@ batch_size = 10
 
 keep_rate = 0.8
 
-x = tf.placeholder('float')
-y = tf.placeholder('float')
+hm_epochs = 10
+
+
+x = tf.placeholder(tf.float32)
+y = tf.placeholder(tf.int32)
 
 
 def conv3d(x, W, strides=[1, 1, 1, 1, 1]):
@@ -84,8 +87,8 @@ def cnn(x):
     }
 
     # Reshape into [-1, image x, image y, image z, 1])
-    x = tf.reshape(x, shape=[-1, max_dims[0], max_dims[1], max_dims[2], 1])
-    # x = tf.reshape(x, shape=[-1, 50, 50, 20, 1])
+    # x = tf.reshape(x, shape=[-1, max_dims[0], max_dims[1], max_dims[2], 1])
+    x = tf.reshape(x, shape=[-1, RESIZE_X, RESIZE_Y, RESIZE_Z, 1])
 
     # Create convolutional layers
     conv1 = tf.nn.relu(conv3d(x, weights['W_conv1']) + biases['b_conv1'])
@@ -122,7 +125,6 @@ if __name__ == "__main__":
     max_dims[0] = RESIZE_Y
     max_dims[1] = RESIZE_X
     total_pixels = max_dims[0]*max_dims[1]*max_dims[2]
-    print(total_pixels)
 
     ######### TRAIN_NEURAL_NETWORK #####
     # TODO put this in function, rest of CNN goes in class
@@ -132,10 +134,11 @@ if __name__ == "__main__":
 
     prediction = cnn(x)
     cost = tf.reduce_mean(
-        tf.nn.softmax_cross_entropy_with_logits(logits=prediction, labels=y))
+        tf.nn.softmax_cross_entropy_with_logits(
+            logits=prediction,
+            labels=tf.one_hot(y, n_classes)))
     optimizer = tf.train.AdamOptimizer(learning_rate=1e-3).minimize(cost)
 
-    hm_epochs = 1
 
     # Given, below is session init with timeout
     # with tf.Session() as sess:
@@ -160,12 +163,61 @@ if __name__ == "__main__":
 
         for filename in train_data:
             data = np.load(INPUT_FOLDER + filename)
-            print('loaded data',filename)
-            # # Temp - resize to RESIZE_X x RESIZE_Y x N
-            # Zoom runs forever, use scipy.misc.imresize
-            # resize_factor = np.array(data[0].shape)/np.array([50,50,20])
-            # data[0] = zoom(data[0], resize_factor, mode='nearest')
 
+            # # Temp - resize to RESIZE_X x RESIZE_Y x RESIZE_Z
+            data_resized_temp = np.ndarray(
+                shape=(RESIZE_Y, RESIZE_X, data[0].shape[2]))
+            for slice_num in range(data[0].shape[2]):
+                data_resized_temp[..., slice_num] = imresize(
+                    data[0][..., slice_num],
+                    (RESIZE_Y, RESIZE_X))
+
+            data_resized = np.ndarray(
+                shape=(RESIZE_Y, RESIZE_X, RESIZE_Z))
+            for i in range(RESIZE_Y):
+                data_resized[i, ...] = imresize(
+                    data_resized_temp[i, ...],
+                    (RESIZE_X, RESIZE_Z))
+
+
+            # print(data[0].shape)
+            data[0] = data_resized
+            # print (data[0].shape)
+            data[0] = data[0].astype(float)
+
+            # Pad image
+            # pad_size = max_dims - data[0].shape
+            # data[0] = np.pad(
+            #     data[0],
+            #     ((0, pad_size[0]), (0, pad_size[1]), (0, pad_size[2])),
+            #     'constant')
+            # print(data[0].shape)
+            # Run normalization, zero-centering
+
+            total_runs += 1
+
+            # Actual code from tutorial
+            try:
+                X = data[0]
+                Y = data[2]
+                _, c = sess.run([optimizer, cost], feed_dict={x: X, y: Y})
+                epoch_loss += c
+                successful_runs += 1
+                # print('success', c)
+            except Exception as e:
+                print('failed to read', filename)
+
+        print('Epoch', epoch + 1, 'completed out of',
+              hm_epochs, 'loss:', epoch_loss)
+
+        correct = tf.equal(tf.argmax(prediction, 1), tf.cast(y, tf.int64))
+        accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
+
+        for filename in validation_data:
+
+            data = np.load(INPUT_FOLDER + filename)
+
+            # # Temp - resize to RESIZE_X x RESIZE_Y x RESIZE_Z
             data_resized_temp = np.ndarray(
                 shape=(RESIZE_Y, RESIZE_X, data[0].shape[2]))
             for slice_num in range(data[0].shape[2]):
@@ -184,45 +236,23 @@ if __name__ == "__main__":
             # print(data[0].shape)
             data[0] = data_resized
             print (data[0].shape)
+            data[0] = data[0].astype(float)
 
-            # Pad image
-            # pad_size = max_dims - data[0].shape
-            # data[0] = np.pad(
-            #     data[0],
-            #     ((0, pad_size[0]), (0, pad_size[1]), (0, pad_size[2])),
-            #     'constant')
-            # print(data[0].shape)
-            # Run normalization, zero-centering
+            print('Accuracy', accuracy.eval({
+                x:data[0],
+                y:data[2]
+                }))
 
-            total_runs += 1
+        print("Done. Finishing accuracy: ")
 
-            # Run the optimizer
-            X = data[0]
-            Y = data[2]
-            _, c = sess.run([optimizer, cost], feed_dict={x:X,y:Y})
-            print('success', c)
 
-            # Actual code from tutorial
-            # try:  # TODO THIS FAILS CONTINUALLY THEN HANGS
-            #     X = data[0]
-            #     Y = data[2]
-            #     _, c = sess.run([optimizer, cost], feed_dict={x: X, y: Y})
-            #     epoch_loss += c
-            #     successful_runs += 1
-            #     print('success', c)
-            # except Exception as e:
-            #     print('failed to read', filename)
+        # print('Accuracy:',accuracy.eval({
+        #     x:[np.load(INPUT_FOLDER + i)[0] for i in validation_data],
+        #     y:[np.load(INPUT_FOLDER + i)[2] for i in validation_data]
+        #     }))
 
-        print('Epoch', epoch + 1, 'completed out of',
-              hm_epochs, 'loss:', epoch_loss)
-
-        correct = tf.equal(tf.argmax(prediction, 1), tf.argmax(y, 1))
-        accuracy = tf.reduce_mean(tf.cast(correct, 'float'))
-
-        print('Accuracy:',accuracy.eval({x:[i[0] for i in validation_data], y:[i[1] for i in validation_data]}))
-
-        print('Done. Finishing accuracy:')
-        print('Accuracy:',accuracy.eval({x:[i[0] for i in validation_data], y:[i[1] for i in validation_data]}))
+        # print('Done. Finishing accuracy:')
+        # print('Accuracy:',accuracy.eval({x:[i[0] for i in validation_data], y:[i[1] for i in validation_data]}))
 
         print('fitment percent:', successful_runs / total_runs)
 
