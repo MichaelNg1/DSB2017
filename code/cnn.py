@@ -12,6 +12,8 @@ TODO: Update CNN class so different network setups can be called via
 function. Allows for flexible testing
 """
 import os
+import time
+import random
 
 import tensorflow as tf
 import numpy as np
@@ -36,6 +38,7 @@ batch_size = 10
 keep_rate = 0.8
 
 hm_epochs = 10
+epoch_size = 1500
 
 
 x = tf.placeholder(tf.float32)
@@ -113,7 +116,7 @@ if __name__ == "__main__":
     DATA_FOLDER = "data\\stage1_preprocessed\\"
     SAMPLE_FOLDER = "data\\sample_preprocessed\\"
 
-    INPUT_FOLDER = SAMPLE_FOLDER
+    INPUT_FOLDER = DATA_FOLDER
     preprocess_list = os.listdir(INPUT_FOLDER)
 
     # Online preprocessing steps when data is read:
@@ -129,8 +132,9 @@ if __name__ == "__main__":
     ######### TRAIN_NEURAL_NETWORK #####
     # TODO put this in function, rest of CNN goes in class
     # to load item, np.load('elem.npy')
-    train_data = preprocess_list[:-2]  # All but last 2 elements
-    validation_data = preprocess_list[-2:]  # Last 2 elements
+    train_data = preprocess_list[:-50]  # All but last 2 elements
+    validation_data = preprocess_list[-50:]  # Last 2 elements
+    print("Separated training from validation")
 
     prediction = cnn(x)
     cost = tf.reduce_mean(
@@ -139,10 +143,7 @@ if __name__ == "__main__":
             labels=tf.one_hot(y, n_classes)))
     optimizer = tf.train.AdamOptimizer(learning_rate=1e-3).minimize(cost)
 
-
-    # Given, below is session init with timeout
-    # with tf.Session() as sess:
-    #     sess.run(tf.initialize_all_variables())
+    print("Created graph")
 
     # setup and initialize session
     config = tf.ConfigProto()
@@ -155,13 +156,17 @@ if __name__ == "__main__":
 
     successful_runs = 0
     total_runs = 0
-    for filename in train_data:
-        data = np.load(INPUT_FOLDER+filename)
-        print(data[0].shape)
+    print("Begin training...")
+    start_time = time.time()
+
     for epoch in range(hm_epochs):
         epoch_loss = 0
+        epoch_start = time.time()
 
-        for filename in train_data:
+        # Take a random sample of epoch_size from train_data
+        sample_filenames = random.sample(train_data, epoch_size)
+        for filename in sample_filenames:
+            ############ LOAD AND FORMAT ################
             data = np.load(INPUT_FOLDER + filename)
 
             # # Temp - resize to RESIZE_X x RESIZE_Y x RESIZE_Z
@@ -180,7 +185,6 @@ if __name__ == "__main__":
                     (RESIZE_X, RESIZE_Z))
 
 
-            # print(data[0].shape)
             data[0] = data_resized
             # print (data[0].shape)
             data[0] = data[0].astype(float)
@@ -196,6 +200,7 @@ if __name__ == "__main__":
 
             total_runs += 1
 
+            ############## TRAIN ###############
             # Actual code from tutorial
             try:
                 X = data[0]
@@ -205,45 +210,49 @@ if __name__ == "__main__":
                 successful_runs += 1
                 # print('success', c)
             except Exception as e:
-                print('failed to read', filename)
+                pass
+                # print('failed to read', filename)
 
         print('Epoch', epoch + 1, 'completed out of',
               hm_epochs, 'loss:', epoch_loss)
+        print('Time:', time.time() - epoch_start)
 
-        correct = tf.equal(tf.argmax(prediction, 1), tf.cast(y, tf.int64))
-        accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
+        # ############## VALIDATE #############
+        # correct = tf.equal(tf.argmax(prediction, 1), tf.cast(y, tf.int64))
+        # accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
 
-        for filename in validation_data:
+        # for filename in validation_data:
 
-            data = np.load(INPUT_FOLDER + filename)
+        #     data = np.load(INPUT_FOLDER + filename)
 
-            # # Temp - resize to RESIZE_X x RESIZE_Y x RESIZE_Z
-            data_resized_temp = np.ndarray(
-                shape=(RESIZE_Y, RESIZE_X, data[0].shape[2]))
-            for slice_num in range(data[0].shape[2]):
-                data_resized_temp[..., slice_num] = imresize(
-                    data[0][..., slice_num],
-                    (RESIZE_Y, RESIZE_X))
+        #     # # Temp - resize to RESIZE_X x RESIZE_Y x RESIZE_Z
+        #     data_resized_temp = np.ndarray(
+        #         shape=(RESIZE_Y, RESIZE_X, data[0].shape[2]))
+        #     for slice_num in range(data[0].shape[2]):
+        #         data_resized_temp[..., slice_num] = imresize(
+        #             data[0][..., slice_num],
+        #             (RESIZE_Y, RESIZE_X))
 
-            data_resized = np.ndarray(
-                shape=(RESIZE_Y, RESIZE_X, RESIZE_Z))
-            for i in range(RESIZE_Y):
-                data_resized[i, ...] = imresize(
-                    data_resized_temp[i, ...],
-                    (RESIZE_X, RESIZE_Z))
+        #     data_resized = np.ndarray(
+        #         shape=(RESIZE_Y, RESIZE_X, RESIZE_Z))
+        #     for i in range(RESIZE_Y):
+        #         data_resized[i, ...] = imresize(
+        #             data_resized_temp[i, ...],
+        #             (RESIZE_X, RESIZE_Z))
 
 
-            # print(data[0].shape)
-            data[0] = data_resized
-            print (data[0].shape)
-            data[0] = data[0].astype(float)
+        #     # print(data[0].shape)
+        #     data[0] = data_resized
+        #     data[0] = data[0].astype(float)
 
-            print('Accuracy', accuracy.eval({
-                x:data[0],
-                y:data[2]
-                }))
+        #     try:
+        #         print('Accuracy', accuracy.eval({
+        #             x:data[0],
+        #             y:data[2]
+        #             }))
+        #     except Exception as e:
+        #         pass
 
-        print("Done. Finishing accuracy: ")
 
 
         # print('Accuracy:',accuracy.eval({
@@ -255,5 +264,6 @@ if __name__ == "__main__":
         # print('Accuracy:',accuracy.eval({x:[i[0] for i in validation_data], y:[i[1] for i in validation_data]}))
 
         print('fitment percent:', successful_runs / total_runs)
+        print('Total time:', time.time() - start_time)
 
 
